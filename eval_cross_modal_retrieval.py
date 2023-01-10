@@ -27,9 +27,9 @@ def main():
     all_captions, all_images = get_ir_dataset()
     print(f"Aggregated {len(all_images)} images and {len(all_captions)} captions")
 
-    # Initialize CLIP model and tokenizer
-    clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-    clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+    # Initialize CLIP model and processor
+    clip_model = CLIPModel.from_pretrained(f"openai/{args.clip_backend}")
+    clip_processor = CLIPProcessor.from_pretrained(f"openai/{args.clip_backend}")
 
     # Pre-compute image-text similarities
     similarities = np.empty((len(all_captions), len(all_images)))
