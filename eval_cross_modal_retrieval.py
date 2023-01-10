@@ -9,13 +9,16 @@ from PIL import Image
 from tqdm import tqdm
 from transformers import CLIPModel, CLIPProcessor
 
-_FLICKR_ANNOTATIONS = '/Users/yonatanbitton/Documents/CLIPEvaluationData/caption_datasets_KARPATY/dataset_flickr30k.json'
-# _FLICKER_IMAGES = "/Users/yonatanbitton/Documents/CLIPEvaluationData/Flickr/flickr30k-images"
-_FLICKER_IMAGES = '/cs/snapless/roys/yonatanbitton/CLIPEvaluationData/relevant_images/Flickr'
+# data_dir = '/cs/snapless/roys/yonatanbitton/CLIPEvaluationData'
+data_dir = '/usr/local/google/home/yonatanbitton/CLIPEval/CLIPEvaluationData'
+_FLICKR_ANNOTATIONS = f'{data_dir}/caption_datasets/dataset_flickr30k.json'
+# _FLICKR_ANNOTATIONS = f'{data_dir}/caption_datasets_KARPATY/dataset_flickr30k.json'
+# _FLICKER_IMAGES = f"{data_dir}/Flickr/flickr30k-images"
+_FLICKER_IMAGES = f'{data_dir}/relevant_images/Flickr'
 _FLICKR30 = 'flickr30'
 
-_MSCOCO_ANNOTATIONS = '/Users/yonatanbitton/Documents/CLIPEvaluationData/caption_datasets_KARPATY/dataset_coco.json'
-_MSCOCO_IMAGES = "/Users/yonatanbitton/Documents/CLIPEvaluationData/Flickr/flickr30k-images"
+_MSCOCO_ANNOTATIONS = f'{data_dir}/caption_datasets/dataset_coco.json'
+_MSCOCO_IMAGES = f"{data_dir}/relevant_images/COCO/val2014"
 _MSCOCO = 'mscoco'
 
 import argparse
@@ -23,7 +26,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--clip_backend', default='clip-vit-base-patch32', choices=['clip-vit-base-patch32'],
                     help='The name of the file to process')
-parser.add_argument('--dataset', default=_FLICKR30, choices=[_FLICKR30, _MSCOCO], help='The name of the file to process')
+parser.add_argument('--dataset', default=_MSCOCO, choices=[_FLICKR30, _MSCOCO], help='The name of the file to process')
 args = parser.parse_args()
 
 def main():
@@ -38,8 +41,8 @@ def main():
 
     # Pre-compute image-text similarities
     similarities = np.empty((len(all_captions), len(all_images)))
-    for i, txt in tqdm(enumerate(all_captions), desc='calculating similarities', total=len(all_captions)):
-        for j, imgname in enumerate(all_images):
+    for i, txt in tqdm(enumerate(all_captions), desc='calculating similarities, i', total=len(all_captions)):
+        for j, imgname in tqdm(enumerate(all_images), desc=f'calculating similarities, i:{i},j', total=len(all_images)):
             similarities[i, j] = get_img_txt_similarity(clip_model, clip_processor, imgname, txt)
 
     # Find top 10 texts with the highest similarity scores for each image
