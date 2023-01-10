@@ -1,3 +1,7 @@
+import torch
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"*** Device: {device} ***")
+
 import json
 import os
 import numpy as np
@@ -5,12 +9,13 @@ from PIL import Image
 from tqdm import tqdm
 from transformers import CLIPModel, CLIPProcessor
 
-_FLICKR_ANNOTATIONS = '/Users/yonatanbitton/Documents/CLIPEvaluation/caption_datasets_KARPATY/dataset_flickr30k.json'
-_FLICKER_IMAGES = "/Users/yonatanbitton/Documents/CLIPEvaluation/Flickr/flickr30k-images"
+_FLICKR_ANNOTATIONS = '/Users/yonatanbitton/Documents/CLIPEvaluationData/caption_datasets_KARPATY/dataset_flickr30k.json'
+# _FLICKER_IMAGES = "/Users/yonatanbitton/Documents/CLIPEvaluationData/Flickr/flickr30k-images"
+_FLICKER_IMAGES = '/cs/snapless/roys/yonatanbitton/CLIPEvaluationData/relevant_images/Flickr'
 _FLICKR30 = 'flickr30'
 
-_MSCOCO_ANNOTATIONS = '/Users/yonatanbitton/Documents/CLIPEvaluation/caption_datasets_KARPATY/dataset_coco.json'
-_MSCOCO_IMAGES = "/Users/yonatanbitton/Documents/CLIPEvaluation/Flickr/flickr30k-images"
+_MSCOCO_ANNOTATIONS = '/Users/yonatanbitton/Documents/CLIPEvaluationData/caption_datasets_KARPATY/dataset_coco.json'
+_MSCOCO_IMAGES = "/Users/yonatanbitton/Documents/CLIPEvaluationData/Flickr/flickr30k-images"
 _MSCOCO = 'mscoco'
 
 import argparse
@@ -18,7 +23,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--clip_backend', default='clip-vit-base-patch32', choices=['clip-vit-base-patch32'],
                     help='The name of the file to process')
-parser.add_argument('--dataset', default=_MSCOCO, choices=[_FLICKR30, _MSCOCO], help='The name of the file to process')
+parser.add_argument('--dataset', default=_FLICKR30, choices=[_FLICKR30, _MSCOCO], help='The name of the file to process')
 args = parser.parse_args()
 
 def main():
