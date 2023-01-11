@@ -5,6 +5,7 @@ Flickr30 images
 https://shannon.cs.illinois.edu/DenotationGraph/
 
 COCO images
+images.cocodataset.org/zips/val2014.zip
 https://cocodataset.org/#home
 
 Winoground
