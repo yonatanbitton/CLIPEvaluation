@@ -8,9 +8,9 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
-data_dir = '/cs/snapless/roys/yonatanbitton/CLIPEvaluationData'
+# data_dir = '/cs/snapless/roys/yonatanbitton/CLIPEvaluationData'
 # data_dir = '/usr/local/google/home/yonatanbitton/CLIPEval/CLIPEvaluationData'
-# data_dir = '/Users/yonatanbitton/Documents/CLIPEvaluationData'
+data_dir = '/Users/yonatanbitton/Documents/CLIPEvaluationData'
 _FLICKR_ANNOTATIONS = f'{data_dir}/caption_datasets/dataset_flickr30k.json'
 # _FLICKR_ANNOTATIONS = f'{data_dir}/caption_datasets_KARPATY/dataset_flickr30k.json'
 # _FLICKER_IMAGES = f"{data_dir}/Flickr/flickr30k-images"
@@ -26,7 +26,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--clip_backend', default='ViT-B/32', choices=['ViT-B/32'],
                     help='The name of the file to process')
-parser.add_argument('--dataset', default=_MSCOCO, choices=[_FLICKR30, _MSCOCO], help='The name of the file to process')
+parser.add_argument('--dataset', default=_FLICKR30, choices=[_FLICKR30, _MSCOCO], help='The name of the file to process')
 args = parser.parse_args()
 
 def main():
@@ -95,7 +95,7 @@ def get_img_txt_similarity(clip_model, clip_processor, imgname, txt, device):
     images_root = _FLICKER_IMAGES if args.dataset == _FLICKR30 else _MSCOCO_IMAGES
     image = Image.open(os.path.join(images_root, imgname))
     image_tensor = clip_processor(image).unsqueeze(0).to(device)
-    tokenized_txt = clip.tokenize([txt]).to(device)
+    tokenized_txt = clip.tokenize([txt], truncate=True).to(device)
     logits_per_image, logits_per_text = clip_model(image_tensor, tokenized_txt)
     logits_per_image = logits_per_image.item()
     return logits_per_image
