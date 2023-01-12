@@ -1,19 +1,18 @@
 import torch
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"*** Device: {device} ***")
-
+import clip
 import json
 import os
 import numpy as np
 from PIL import Image
 from tqdm import tqdm
-from transformers import CLIPModel, CLIPProcessor
 
-# data_dir = '/cs/snapless/roys/yonatanbitton/CLIPEvaluationData'
-data_dir = '/usr/local/google/home/yonatanbitton/CLIPEval/CLIPEvaluationData'
+data_dir = '/cs/snapless/roys/yonatanbitton/CLIPEvaluationData'
+# data_dir = '/usr/local/google/home/yonatanbitton/CLIPEval/CLIPEvaluationData'
+# data_dir = '/Users/yonatanbitton/Documents/CLIPEvaluationData'
 _FLICKR_ANNOTATIONS = f'{data_dir}/caption_datasets/dataset_flickr30k.json'
-# _FLICKR_ANNOTATIONS = f'{data_dir}/caption_datasets_KARPATY/dataset_flickr30k.json'
-# _FLICKER_IMAGES = f"{data_dir}/Flickr/flickr30k-images"
 _FLICKER_IMAGES = f'{data_dir}/relevant_images/Flickr'
 _FLICKR30 = 'flickr30'
 
@@ -24,26 +23,37 @@ _MSCOCO = 'mscoco'
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--clip_backend', default='clip-vit-base-patch32', choices=['clip-vit-base-patch32'],
-                    help='The name of the file to process')
-parser.add_argument('--dataset', default=_MSCOCO, choices=[_FLICKR30, _MSCOCO], help='The name of the file to process')
+parser.add_argument('--clip_backend', default='RN50', choices=['ViT-B/32', 'RN50'],
+                    help='The CLIP backend version')
+parser.add_argument('--batch_size', type=int, default=128, help='Text batch size for each image')
+parser.add_argument('--dataset', default=_FLICKR30, choices=[_FLICKR30, _MSCOCO], help='The name of the file to process')
 args = parser.parse_args()
 
 def main():
-    print(f"Dataset: {args.dataset}")
+    print(f"Dataset: {args.dataset}, backend: {args.clip_backend}")
     # Get Image Retrieval Dataset
     all_captions, all_images = get_ir_dataset()
     print(f"Aggregated {len(all_images)} images and {len(all_captions)} captions")
 
     # Initialize CLIP model and processor
-    clip_model = CLIPModel.from_pretrained(f"openai/{args.clip_backend}")
-    clip_processor = CLIPProcessor.from_pretrained(f"openai/{args.clip_backend}")
+    clip_model, clip_processor = clip.load(args.clip_backend, device=device)
+    print(f"Loaded model CLIP {args.clip_backend}")
+    tokenized_txt = clip.tokenize(all_captions, truncate=True).to(device)
 
-    # Pre-compute image-text similarities
-    similarities = np.empty((len(all_captions), len(all_images)))
-    for i, txt in tqdm(enumerate(all_captions), desc='calculating similarities, i', total=len(all_captions)):
-        for j, imgname in tqdm(enumerate(all_images), desc=f'calculating similarities, i:{i},j', total=len(all_images)):
-            similarities[i, j] = get_img_txt_similarity(clip_model, clip_processor, imgname, txt)
+    num_batches = len(all_captions) // args.batch_size + (len(all_captions) % args.batch_size != 0)
+    print(f"batch_size: {args.batch_size}, num_batches: {num_batches}")
+    images_root = _FLICKER_IMAGES if args.dataset == _FLICKR30 else _MSCOCO_IMAGES
+
+    similarities = np.zeros((len(all_captions), len(all_images)))
+    for j, imgname in tqdm(enumerate(all_images), desc='calculating similarities', total=len(all_images)):
+        image = Image.open(os.path.join(images_root, imgname))
+        image_tensor = clip_processor(image).unsqueeze(0).to(device)
+        for i in range(0, len(all_captions), args.batch_size):
+            start = i
+            end = min(i + args.batch_size, len(all_captions))
+            tokenized_txt_batch = tokenized_txt[start:end].to(device)
+            logits_per_image_batch, logits_per_text_batch = clip_model(image_tensor, tokenized_txt_batch.to(device))
+            similarities[start:end, j] = logits_per_image_batch.detach().cpu().numpy()
 
     # Find top 10 texts with the highest similarity scores for each image
     top_texts_for_img = {}
@@ -90,16 +100,6 @@ def get_ir_dataset():
             all_images.append(data['filename'])
             all_captions.append(caption)
     return all_captions, all_images
-
-
-def get_img_txt_similarity(clip_model, clip_processor, imgname, txt):
-    images_root = _FLICKER_IMAGES if args.dataset == _FLICKR30 else _MSCOCO_IMAGES
-    image = Image.open(os.path.join(images_root, imgname))
-    inputs = clip_processor(text=[txt], images=image, return_tensors="pt", padding=True)
-    outputs = clip_model(**inputs)
-    logits_per_image = outputs.logits_per_image.item()
-    return logits_per_image
-
 
 def compute_mean_r_at_k(rankings, labels, k):
     r_at_k = []
