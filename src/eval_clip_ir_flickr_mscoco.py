@@ -9,9 +9,9 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
-data_dir = '/cs/snapless/roys/yonatanbitton/CLIPEvaluationData'
+# data_dir = '/cs/snapless/roys/yonatanbitton/CLIPEvaluationData'
 # data_dir = '/usr/local/google/home/yonatanbitton/CLIPEval/CLIPEvaluationData'
-# data_dir = '/Users/yonatanbitton/Documents/CLIPEvaluationData'
+data_dir = '/Users/yonatanbitton/Documents/CLIPEvaluationData'
 _FLICKR_ANNOTATIONS = f'{data_dir}/caption_datasets/dataset_flickr30k.json'
 _FLICKER_IMAGES = f'{data_dir}/relevant_images/Flickr'
 _FLICKR30 = 'flickr30'
@@ -19,20 +19,25 @@ _FLICKR30 = 'flickr30'
 _MSCOCO_ANNOTATIONS = f'{data_dir}/caption_datasets/dataset_coco.json'
 _MSCOCO_IMAGES = f"{data_dir}/relevant_images/COCO/val2014"
 _MSCOCO = 'mscoco'
+_PREFIX = 'a photo of'
 
 import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--clip_backend', default='RN50', choices=['ViT-B/32', 'RN50'],
                     help='The CLIP backend version')
-parser.add_argument('--batch_size', type=int, default=128, help='Text batch size for each image')
-parser.add_argument('--dataset', default=_FLICKR30, choices=[_FLICKR30, _MSCOCO], help='The name of the file to process')
+parser.add_argument('--batch_size', type=int, default=200, help='Text batch size for each image. Batch size of 200 should fit with a single RTX2080.')
+parser.add_argument('--dataset', default=_FLICKR30, choices=[_FLICKR30, _MSCOCO],
+                    help='The name of the file to process')
+parser.add_argument('--add_prefix', action='store_const', default=True, help='Adds a prefix of "an image of a" to the textual prompt, following the original paper.', const=True)
+
 args = parser.parse_args()
 
+
 def main():
-    print(f"Dataset: {args.dataset}, backend: {args.clip_backend}")
+    print(f"Dataset: {args.dataset}, backend: {args.clip_backend}, add_prefix: {args.add_prefix}")
     # Get Image Retrieval Dataset
-    all_captions, all_images = get_ir_dataset()
+    all_captions, all_images = prepare_ir_dataset()
     print(f"Aggregated {len(all_images)} images and {len(all_captions)} captions")
 
     # Initialize CLIP model and processor
@@ -89,7 +94,7 @@ def main():
     print("Done")
 
 
-def get_ir_dataset():
+def prepare_ir_dataset():
     path = _FLICKR_ANNOTATIONS if args.dataset == _FLICKR30 else _MSCOCO_ANNOTATIONS
     dataset = json.load(open(path))
     all_images = []
@@ -97,9 +102,12 @@ def get_ir_dataset():
     for data in dataset['images']:
         if data['split'] == 'test':
             caption = data['sentences'][0]['raw']
+            if args.add_prefix:
+                caption = f"{_PREFIX} {caption}"
             all_images.append(data['filename'])
             all_captions.append(caption)
     return all_captions, all_images
+
 
 def compute_mean_r_at_k(rankings, labels, k):
     r_at_k = []
