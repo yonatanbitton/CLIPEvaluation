@@ -1,3 +1,4 @@
+import pandas as pd
 import torch
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -27,7 +28,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--clip_backend', default='RN50', choices=['ViT-B/32', 'RN50'],
                     help='The CLIP backend version')
 parser.add_argument('--batch_size', type=int, default=200, help='Text batch size for each image. Batch size of 200 should fit with a single RTX2080.')
-parser.add_argument('--dataset', default=_FLICKR30, choices=[_FLICKR30, _MSCOCO],
+parser.add_argument('--dataset', default=_MSCOCO, choices=[_FLICKR30, _MSCOCO],
                     help='The name of the file to process')
 parser.add_argument('--add_prefix', action='store_const', default=True, help='Adds a prefix of "an image of a" to the textual prompt, following the original paper.', const=True)
 
@@ -37,7 +38,7 @@ args = parser.parse_args()
 def main():
     print(f"Dataset: {args.dataset}, backend: {args.clip_backend}, add_prefix: {args.add_prefix}")
     # Get Image Retrieval Dataset
-    all_captions, all_images = prepare_ir_dataset()
+    all_captions, all_images, df = prepare_ir_dataset()
     print(f"Aggregated {len(all_images)} images and {len(all_captions)} captions")
 
     # Initialize CLIP model and processor
@@ -68,7 +69,7 @@ def main():
         top_texts_for_img[imgname] = top_texts
 
     # Find top 10 images with the highest similarity scores for each text
-    top_imgs_for_txt = {}
+    top_imgs_for_txt = {} # prob is here, the txt is low
     for i, txt in enumerate(all_captions):
         top_img_indices = similarities[i, :].argsort()[-10:][::-1]
         top_imgs = [all_images[j] for j in top_img_indices]
@@ -95,20 +96,30 @@ def main():
 
 
 def prepare_ir_dataset():
+    sent_keys = ['tokens', 'raw', 'imgid', 'sentid']
     path = _FLICKR_ANNOTATIONS if args.dataset == _FLICKR30 else _MSCOCO_ANNOTATIONS
     dataset = json.load(open(path))
     all_images = []
     all_captions = []
+    relevant_rows = []
     for data in dataset['images']:
-        if len(all_images) > 50:
-            break
+        # if len(all_images) > 50:
+        #     break
         if data['split'] == 'test':
-            caption = data['sentences'][0]['raw']
-            if args.add_prefix:
-                caption = f"{_PREFIX} {caption}"
             all_images.append(data['filename'])
-            all_captions.append(caption)
-    return all_captions, all_images
+            sentences = data.pop('sentences')
+            for k in sent_keys:
+                k_lst = [sent[k] for sent in sentences]
+                data[k] = k_lst
+            relevant_rows.append(data)
+            for caption in data['raw']:
+                if args.add_prefix:
+                    caption = f"{_PREFIX} {caption}"
+                all_captions.append(caption)
+    df = pd.DataFrame(relevant_rows)
+    for c in ['sentids'] + sent_keys:
+        df[c] = df[c].apply(json.dumps)
+    return all_captions, all_images, df
 
 
 def compute_mean_r_at_k(rankings, labels, k):
