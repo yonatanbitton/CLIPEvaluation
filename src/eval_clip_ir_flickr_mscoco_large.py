@@ -10,8 +10,6 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
-# data_dir = '/cs/snapless/roys/yonatanbitton/CLIPEvaluationData'
-# data_dir = '/usr/local/google/home/yonatanbitton/CLIPEval/CLIPEvaluationData'
 data_dir = '/Users/yonatanbitton/Documents/CLIPEvaluationData'
 _FLICKR_ANNOTATIONS = f'{data_dir}/caption_datasets/dataset_flickr30k.json'
 _FLICKER_IMAGES = f'{data_dir}/relevant_images/Flickr'
