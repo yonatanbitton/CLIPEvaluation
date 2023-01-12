@@ -8,9 +8,9 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
-data_dir = '/cs/snapless/roys/yonatanbitton/CLIPEvaluationData'
+# data_dir = '/cs/snapless/roys/yonatanbitton/CLIPEvaluationData'
 # data_dir = '/usr/local/google/home/yonatanbitton/CLIPEval/CLIPEvaluationData'
-# data_dir = '/Users/yonatanbitton/Documents/CLIPEvaluationData'
+data_dir = '/Users/yonatanbitton/Documents/CLIPEvaluationData'
 _FLICKR_ANNOTATIONS = f'{data_dir}/caption_datasets/dataset_flickr30k.json'
 # _FLICKR_ANNOTATIONS = f'{data_dir}/caption_datasets_KARPATY/dataset_flickr30k.json'
 # _FLICKER_IMAGES = f"{data_dir}/Flickr/flickr30k-images"
@@ -37,6 +37,7 @@ def main():
 
     # Initialize CLIP model and processor
     clip_model, clip_processor = clip.load("ViT-B/32", device=device)
+    tokenized_txt = clip.tokenize(all_captions, truncate=True).to(device)
 
     # Pre-compute image-text similarities
     similarities = np.empty((len(all_captions), len(all_images)))
@@ -44,7 +45,6 @@ def main():
         images_root = _FLICKER_IMAGES if args.dataset == _FLICKR30 else _MSCOCO_IMAGES
         image = Image.open(os.path.join(images_root, imgname))
         image_tensor = clip_processor(image).unsqueeze(0).to(device)
-        tokenized_txt = clip.tokenize(all_captions, truncate=True).to(device)
         logits_per_image, logits_per_text = clip_model(image_tensor, tokenized_txt)
         similarities[:, j] = logits_per_image.detach().cpu().numpy()
 
@@ -88,6 +88,8 @@ def get_ir_dataset():
     all_images = []
     all_captions = []
     for data in dataset['images']:
+        if len(all_images) > 10:
+            break
         if data['split'] == 'test':
             caption = data['sentences'][0]['raw']
             all_images.append(data['filename'])

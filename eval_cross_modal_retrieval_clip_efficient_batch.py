@@ -8,9 +8,9 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
-# data_dir = '/cs/snapless/roys/yonatanbitton/CLIPEvaluationData'
+data_dir = '/cs/snapless/roys/yonatanbitton/CLIPEvaluationData'
 # data_dir = '/usr/local/google/home/yonatanbitton/CLIPEval/CLIPEvaluationData'
-data_dir = '/Users/yonatanbitton/Documents/CLIPEvaluationData'
+# data_dir = '/Users/yonatanbitton/Documents/CLIPEvaluationData'
 _FLICKR_ANNOTATIONS = f'{data_dir}/caption_datasets/dataset_flickr30k.json'
 # _FLICKR_ANNOTATIONS = f'{data_dir}/caption_datasets_KARPATY/dataset_flickr30k.json'
 # _FLICKER_IMAGES = f"{data_dir}/Flickr/flickr30k-images"
@@ -25,7 +25,8 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--clip_backend', default='RN50', choices=['ViT-B/32', 'RN50'],
-                    help='The name of the file to process')
+                    help='The CLIP backend version')
+parser.add_argument('--batch_size', type=int, default=128, help='Text batch size for each image')
 parser.add_argument('--dataset', default=_FLICKR30, choices=[_FLICKR30, _MSCOCO], help='The name of the file to process')
 args = parser.parse_args()
 
@@ -36,13 +37,25 @@ def main():
     print(f"Aggregated {len(all_images)} images and {len(all_captions)} captions")
 
     # Initialize CLIP model and processor
-    clip_model, clip_processor = clip.load("ViT-B/32", device=device)
+    clip_model, clip_processor = clip.load(args.clip_backend, device=device)
+    tokenized_txt = clip.tokenize(all_captions, truncate=True).to(device)
+
+    num_batches = len(all_captions) // args.batch_size + (len(all_captions) % args.batch_size != 0)
+    print(f"batch_size: {args.batch_size}, num_batches: {num_batches}")
+    images_root = _FLICKER_IMAGES if args.dataset == _FLICKR30 else _MSCOCO_IMAGES
 
     # Pre-compute image-text similarities
     similarities = np.empty((len(all_captions), len(all_images)))
-    for i, txt in tqdm(enumerate(all_captions), desc='calculating similarities, i', total=len(all_captions)):
-        for j, imgname in enumerate(all_images):
-            similarities[i, j] = get_img_txt_similarity(clip_model, clip_processor, imgname, txt, device)
+    for i, imgname in tqdm(enumerate(all_images), desc='calculating similarities', total=len(all_images)):
+        image = Image.open(os.path.join(images_root, imgname))
+        image_tensor = clip_processor(image).unsqueeze(0).to(device)
+
+        for j in range(num_batches):
+            start = j * args.batch_size
+            end = (j + 1) * args.batch_size
+            tokenized_txt_batch = tokenized_txt[start:end].to(device)
+            logits_per_image_batch, logits_per_text_batch = clip_model(image_tensor, tokenized_txt_batch)
+            similarities[start:end, i] = logits_per_image_batch.detach().cpu().numpy()
 
     # Find top 10 texts with the highest similarity scores for each image
     top_texts_for_img = {}
@@ -84,24 +97,11 @@ def get_ir_dataset():
     all_images = []
     all_captions = []
     for data in dataset['images']:
-        if len(all_images) > 10:
-            break
         if data['split'] == 'test':
             caption = data['sentences'][0]['raw']
             all_images.append(data['filename'])
             all_captions.append(caption)
     return all_captions, all_images
-
-
-def get_img_txt_similarity(clip_model, clip_processor, imgname, txt, device):
-    images_root = _FLICKER_IMAGES if args.dataset == _FLICKR30 else _MSCOCO_IMAGES
-    image = Image.open(os.path.join(images_root, imgname))
-    image_tensor = clip_processor(image).unsqueeze(0).to(device)
-    tokenized_txt = clip.tokenize([txt], truncate=True).to(device)
-    logits_per_image, logits_per_text = clip_model(image_tensor, tokenized_txt)
-    logits_per_image = logits_per_image.item()
-    return logits_per_image
-
 
 def compute_mean_r_at_k(rankings, labels, k):
     r_at_k = []
