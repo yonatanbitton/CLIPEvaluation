@@ -1,4 +1,3 @@
-import pandas as pd
 import torch
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -10,7 +9,8 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
-data_dir = '/Users/yonatanbitton/Documents/CLIPEvaluationData'
+# data_dir = '/Users/yonatanbitton/Documents/CLIPEvaluationData'
+data_dir = '/cs/snapless/roys/yonatanbitton/CLIPEvaluationData'
 _FLICKR_ANNOTATIONS = f'{data_dir}/caption_datasets/dataset_flickr30k.json'
 _FLICKER_IMAGES = f'{data_dir}/relevant_images/Flickr'
 _FLICKR30 = 'flickr30'
@@ -23,7 +23,7 @@ _PREFIX = 'a photo of'
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--clip_backend', default='RN50', choices=['ViT-B/32', 'RN50'],
+parser.add_argument('--clip_backend', default='ViT-B/32', choices=['RN50', 'ViT-B/32', 'ViT-L/14', 'RN50x64'],
                     help='The CLIP backend version')
 parser.add_argument('--batch_size', type=int, default=200, help='Text batch size for each image. Batch size of 200 should fit with a single RTX2080.')
 parser.add_argument('--dataset', default=_MSCOCO, choices=[_FLICKR30, _MSCOCO],
@@ -36,7 +36,7 @@ args = parser.parse_args()
 def main():
     print(f"Dataset: {args.dataset}, backend: {args.clip_backend}, add_prefix: {args.add_prefix}")
     # Get Image Retrieval Dataset
-    all_captions, all_images, df = prepare_ir_dataset()
+    all_captions, all_images = prepare_ir_dataset()
     print(f"Aggregated {len(all_images)} images and {len(all_captions)} captions")
 
     # Initialize CLIP model and processor
@@ -59,75 +59,60 @@ def main():
             logits_per_image_batch, logits_per_text_batch = clip_model(image_tensor, tokenized_txt_batch.to(device))
             similarities[start:end, j] = logits_per_image_batch.detach().cpu().numpy()
 
-    # Find top 10 texts with the highest similarity scores for each image
-    top_texts_for_img = {}
-    for j, imgname in enumerate(all_images):
-        top_text_indices = similarities[:, j].argsort()[-10:][::-1]
-        top_texts = [all_captions[i] for i in top_text_indices]
-        top_texts_for_img[imgname] = top_texts
+    print(f'Text-Retrieval R@1: {text_recall_at_k(similarities, k=1)}')
+    print(f'Text-Retrieval R@5: {text_recall_at_k(similarities, k=5)}')
+    print(f'Text-Retrieval R@10: {text_recall_at_k(similarities, k=10)}')
 
-    # Find top 10 images with the highest similarity scores for each text
-    top_imgs_for_txt = {} # prob is here, the txt is low
-    for i, txt in enumerate(all_captions):
-        top_img_indices = similarities[i, :].argsort()[-10:][::-1]
-        top_imgs = [all_images[j] for j in top_img_indices]
-        top_imgs_for_txt[txt] = top_imgs
-
-    # Compute mean R@1, R@5, and R@10 for text
-    mean_r_at_1_txt = compute_mean_r_at_k([top_imgs_for_txt[txt] for txt in all_captions], all_images, 1)
-    mean_r_at_5_txt = compute_mean_r_at_k([top_imgs_for_txt[txt] for txt in all_captions], all_images, 5)
-    mean_r_at_10_txt = compute_mean_r_at_k([top_imgs_for_txt[txt] for txt in all_captions], all_images, 10)
-
-    # Compute mean R@1, R@5, and R@10 for image
-    mean_r_at_1_img = compute_mean_r_at_k([top_texts_for_img[img] for img in all_images], all_captions, 1)
-    mean_r_at_5_img = compute_mean_r_at_k([top_texts_for_img[img] for img in all_images], all_captions, 5)
-    mean_r_at_10_img = compute_mean_r_at_k([top_texts_for_img[img] for img in all_images], all_captions, 10)
-    print(
-        f"Mean R@1 for text: {mean_r_at_1_txt:.1f}  "
-        f"Mean R@5 for text: {mean_r_at_5_txt:.1f}  "
-        f"Mean R@10 for text: {mean_r_at_10_txt:.1f}  "
-        f"Mean R@1 for image: {mean_r_at_1_img:.1f}  "
-        f"Mean R@5 for image: {mean_r_at_5_img:.1f}  "
-        f"Mean R@10 for image: {mean_r_at_10_img:.1f}")
+    print(f'Image-Retrieval R@1: {image_recall_at_k(similarities, k=1)}')
+    print(f'Image-Retrieval R@5: {image_recall_at_k(similarities, k=5)}')
+    print(f'Image-Retrieval R@10: {image_recall_at_k(similarities, k=10)}')
 
     print("Done")
 
 
 def prepare_ir_dataset():
-    sent_keys = ['tokens', 'raw', 'imgid', 'sentid']
     path = _FLICKR_ANNOTATIONS if args.dataset == _FLICKR30 else _MSCOCO_ANNOTATIONS
     dataset = json.load(open(path))
     all_images = []
     all_captions = []
-    relevant_rows = []
     for data in dataset['images']:
-        if len(all_images) >= 10:
-            break
         if data['split'] == 'test':
             all_images.append(data['filename'])
-            sentences = data.pop('sentences')
-            for k in sent_keys:
-                k_lst = [sent[k] for sent in sentences]
-                data[k] = k_lst
-            relevant_rows.append(data)
             for caption in data['raw']:
                 if args.add_prefix:
                     caption = f"{_PREFIX} {caption}"
                 all_captions.append(caption)
-    df = pd.DataFrame(relevant_rows)
-    for c in ['sentids'] + sent_keys:
-        df[c] = df[c].apply(json.dumps)
-    return all_captions, all_images, df
+    return all_captions, all_images
 
+def text_recall_at_k(similarities, k):
+    ''' the images are used to retrieve the corresponding sentences '''
+    n_images = similarities.shape[1]
+    recall = 0
+    for i in range(n_images):
+        # Find the top K captions for each image
+        top_k_captions = similarities[:, i].argsort()[-k:][::-1][:k]
+        # Check if at least one of the relevant captions is in the top K
+        relevant_captions = np.arange(i*5, (i+1)*5)
+        if any(np.isin(relevant_captions, top_k_captions)):
+            recall += 1
+    # Calculate the overall recall
+    recall = recall / n_images
+    return recall
 
-def compute_mean_r_at_k(rankings, labels, k):
-    r_at_k = []
-    for ranking, label in zip(rankings, labels):
-        if label in ranking[:k]:
-            r_at_k.append(1)
-        else:
-            r_at_k.append(0)
-    return np.mean(r_at_k) * 100
+def image_recall_at_k(similarities, k):
+    ''' the sentences are used to retrieve the corresponding images '''
+    n_captions = similarities.shape[0]
+    recall = 0
+    for i in range(n_captions):
+        # Find the top K images for each caption
+        top_k_images = similarities[i,:].argsort()[::-1][:k]
+        # Check if at least one of the relevant images is in the top K
+        relevant_images = [int(i/5)]
+        if any(np.isin(relevant_images, top_k_images)):
+            recall += 1
+    # Calculate the overall recall
+    recall = recall / n_captions
+    return recall
 
 
 if __name__ == '__main__':
