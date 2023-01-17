@@ -12,11 +12,11 @@ from tqdm import tqdm
 data_dir = '/Users/yonatanbitton/Documents/CLIPEvaluationData'
 _FLICKR_ANNOTATIONS = f'{data_dir}/caption_datasets/dataset_flickr30k.json'
 _FLICKER_IMAGES = f'{data_dir}/relevant_images/Flickr'
-_FLICKR30 = 'flickr30'
+_FLICKR30 = 'flickr30'  # 1000 images, 5000 captions, 5,000,000 items in similarity matrix
 
 _MSCOCO_ANNOTATIONS = f'{data_dir}/caption_datasets/dataset_coco.json'
 _MSCOCO_IMAGES = f"{data_dir}/relevant_images/COCO/val2014"
-_MSCOCO = 'mscoco'
+_MSCOCO = 'mscoco'  # 5000 images, 25000 captions, 125,000,000 items in similarity matrix
 _PREFIX = 'a photo of'
 
 import argparse
@@ -75,8 +75,6 @@ def prepare_ir_dataset():
     all_images = []
     all_captions = []
     for data in dataset['images']:
-        if len(all_images)>20:
-            break
         if data['split'] == 'test':
             all_images.append(data['filename'])
             for caption in data['sentences'][:5]:
