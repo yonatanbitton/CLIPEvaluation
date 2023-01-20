@@ -3,7 +3,8 @@ import os
 import json
 data_dir = '/Users/yonatanbitton/Downloads'
 # predictions_path = f'{data_dir}/bias_predictions_backend_RN50x64_num_items_54770.csv'
-predictions_path = f'{data_dir}/bias_predictions_backend_RN50_big.csv'
+# predictions_path = f'{data_dir}/bias_predictions_backend_RN50_big.csv'
+predictions_path = '/Users/yonatanbitton/Downloads/bias_predictions_dataset_fair_face_backend_RN50_normalized_num_items_54770.csv'
 RACE = 'race'
 AGE = 'age'
 GENDER = 'gender'
@@ -18,16 +19,17 @@ def main():
     df = pd.read_csv(predictions_path)
 
     # Table 3+4, percent accuracy on Race, Gender and Age, comparing White vs. Non-white
-    df_white = df[df[RACE] == WHITE]
-    df_non_white = df[df[RACE] != WHITE]
-    print(f"# white: {len(df_white)}, non white: {len(df_non_white)}")
+    df_race_age_gender = df[df[OBJECTIVE].isin([RACE, AGE, GENDER])]
+    df_race_age_gender_white = df_race_age_gender[df_race_age_gender[RACE] == WHITE]
+    df_race_age_gender_non_white = df_race_age_gender[df_race_age_gender[RACE] != WHITE]
+    print(f"# white: {len(df_race_age_gender_white)}, non white: {len(df_race_age_gender_non_white)}")
     accs = []
     for obj in objectives:
-        df_obj_white = df_white[df_white[OBJECTIVE] == obj]
+        df_obj_white = df_race_age_gender_white[df_race_age_gender_white[OBJECTIVE] == obj]
         obj_acc_white = round(df_obj_white['is_correct'].mean() * 100, 2)
         num_items_white = len(df_obj_white)
 
-        df_obj_non_white = df_non_white[df_non_white[OBJECTIVE] == obj]
+        df_obj_non_white = df_race_age_gender_non_white[df_race_age_gender_non_white[OBJECTIVE] == obj]
         obj_acc_non_white = round(df_obj_non_white['is_correct'].mean() * 100, 2)
         num_items_non_white = len(df_obj_non_white)
         accs.append({OBJECTIVE: obj, '% accuracy white': obj_acc_white, "# white": num_items_white, '% accuracy non white': obj_acc_non_white, '# non white': num_items_non_white})

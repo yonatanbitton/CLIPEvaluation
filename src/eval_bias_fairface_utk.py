@@ -98,17 +98,19 @@ def main():
         prompts_for_obj[obj] = prompts
         labels_processed_torch = torch.stack(labels_processed).squeeze(1)
         labels_processed_encoded = model.encode_text(labels_processed_torch)
+        # labels_processed_encoded /= labels_processed_encoded.norm(dim=-1, keepdim=True)
         labels_processed_for_obj[obj] = labels_processed_encoded
 
     # Iterate and encode image
     image_features = []
     examples_info_for_obj = defaultdict(list)
     for idx, e in enumerate(tqdm(dataset, desc='encoding images', total=len(dataset))):
-        if idx > 20:
-            break
+        # if idx > 20:
+        #     break
         image_processed = preprocess(e[IMAGE]).unsqueeze(0).to(device)
         with torch.no_grad():
             image_feature = model.encode_image(image_processed)
+            # image_feature /= image_feature.norm(dim=-1, keepdim=True)
         image_features.append(image_feature)
         for obj in objectives:
             obj_label = get_item_class(e, obj, transform_items)
@@ -139,7 +141,7 @@ def main():
             acc_items.append(e)
     acc_items_df = pd.DataFrame(acc_items)
     print(f"Dumping df at length {len(acc_items_df)}")
-    acc_items_df.to_csv(f'{args.data_dir}/bias_predictions_dataset_{args.dataset}_backend_{args.clip_backend}_num_items_{len(acc_items_df)}.csv',index=False)
+    acc_items_df.to_csv(f'{args.data_dir}/bias_predictions_dataset_{args.dataset}_backend_{args.clip_backend}_normalized_num_items_{len(acc_items_df)}.csv',index=False)
     print("Done")
 
 
