@@ -9,7 +9,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--clip_backend', default='RN50', choices=['RN50', 'ViT-B/32', 'ViT-L/14', 'RN50x64'],
                     help='The CLIP backend version')
-parser.add_argument('--dataset', default='utk_faces', choices=['utk_faces', 'fair_face'],
+parser.add_argument('--dataset', default='fair_face', choices=['utk_faces', 'fair_face'],
                     help='The name of the file to process')
 parser.add_argument('--data_dir', default='/Users/yonatanbitton/Downloads', help='Data directory')
 args = parser.parse_args()
@@ -26,8 +26,6 @@ GENDER = 'gender'
 TOXIC = 'toxic'
 RACE_GENDER_INTERSECTION = 'race_gender_intersection'
 objectives = [RACE, AGE, GENDER, TOXIC, RACE_GENDER_INTERSECTION]
-# objectives = [TOXIC, RACE_GENDER_INTERSECTION]
-# objectives = [TOXIC]
 PROMPT = 'prompt'
 LABELS = 'labels'
 IMAGE = 'image'
@@ -66,7 +64,6 @@ def main():
     print(f'args.clip_backend: {args.clip_backend}')
     model, preprocess = clip.load(args.clip_backend, device)
 
-
     # Get dataset labels
     ds_labels = pd.DataFrame([{AGE: x[AGE], GENDER: x[GENDER], RACE: x[RACE]} for x in dataset])
     age_labels = sorted(list(set([str(x) for x in ds_labels[AGE]])))
@@ -103,7 +100,7 @@ def main():
         labels_processed_encoded = model.encode_text(labels_processed_torch)
         labels_processed_for_obj[obj] = labels_processed_encoded
 
-    # Iterate and encode
+    # Iterate and encode image
     image_features = []
     examples_info_for_obj = defaultdict(list)
     for idx, e in enumerate(tqdm(dataset, desc='encoding images', total=len(dataset))):
@@ -121,7 +118,7 @@ def main():
 
     images_processed_encoded = torch.stack(image_features).squeeze(1)
 
-    # Predict
+    # Predict (calculating similarities)
     acc_items = []
     for obj, text_features_encoded in tqdm(labels_processed_for_obj.items(), desc='Predicting top1', total=len(labels_processed_for_obj)):
         image_logits = (images_processed_encoded @ text_features_encoded.T).squeeze(0).cpu().detach().numpy()

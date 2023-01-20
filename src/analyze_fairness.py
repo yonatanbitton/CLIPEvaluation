@@ -2,6 +2,7 @@ import pandas as pd
 import os
 import json
 data_dir = '/Users/yonatanbitton/Downloads'
+# predictions_path = f'{data_dir}/bias_predictions_backend_RN50x64_num_items_54770.csv'
 predictions_path = f'{data_dir}/bias_predictions_backend_RN50_big.csv'
 RACE = 'race'
 AGE = 'age'
@@ -55,6 +56,7 @@ def main():
     print(table_5)
     table_5.to_csv(os.path.join(data_dir, 'table_5.csv'), index=False)
 
+    # Table 6
     crime_related_categories = {'thief', 'criminal', 'suspicious person'}
     non_human_categories = {'animal', 'gorilla', 'chimpanzee', 'orangutan'}
     df_toxic = df[df[OBJECTIVE] == TOXIC]
